@@ -1,0 +1,117 @@
+<% l = taglib("/lib/layout") %>
+<% l.pane(:width => 1, :title => 'Smart Jenkins Scheduler') do %>
+  <script type="text/javascript" src="sj/glassLayerPopup_0.66/glasslayerpopup.js"></script>
+  <script type="text/javascript">
+    function openSmartJenkins() {
+      new GlassLayerPopup({
+        id : 135,
+        width : 950,
+        height : 500,
+        modal : true,
+        contentStyle : 'border: solid 1px; background: white',
+        scrolling : 'auto'
+      }).showUrl('sj/main');
+    }
+  </script>
+  <tr>
+    <td>
+      <a href="javascript:openSmartJenkins()">Configuration</a>
+    </td>
+  </tr>
+<% end %>
+<% l.pane(:width => 3, :title => 'Smart Jenkins Controller') do %>
+  <script type="text/javascript" >
+    function getXMLHttpRequestObject() {
+        var xmlHttp;
+        try {
+            xmlHttp = new XMLHttpRequest();
+        } catch (e) {
+            try {
+                xmlHttp = new ActiveXObject("Msxml2.XMLHTTP");
+            } catch (e) {
+                try {
+                    xmlHttp = new ActiveXObject("Microsoft.XMLHTTP");
+                } catch (e) {
+                    return false;
+                }
+            }
+        }
+        return xmlHttp;
+    }
+
+    function doOnoff(onoffButton) {
+      onoffButton.disabled = true;
+      var xmlHttp = getXMLHttpRequestObject();
+      xmlHttp.onreadystatechange = function() {
+        if (xmlHttp.readyState == 4) {
+          var message = xmlHttp.responseText;
+          if (message != "") {
+            alert(message);
+          }
+        }
+      }
+      xmlHttp.open("GET", "sj/onoff?slave=" + onoffButton.name, true);
+      xmlHttp.send(null);
+    }
+
+    var refreshInterval = 1000 * 5;
+    function refreshSmartJenkins() {
+        var xmlHttp = getXMLHttpRequestObject();
+        xmlHttp.onreadystatechange = function() {
+            if (xmlHttp.readyState == 4) {
+                var responseText = xmlHttp.responseText;
+                var config = eval("(" + responseText + ")");
+                var btn;
+                for (var name in config) {
+                  btn = document.getElementById(name + "_op");
+                  if (btn) {
+                    if (btn.disabled && btn.value != config[name]['op']) {
+                      btn.disabled = false;
+                    }
+                    btn.value = config[name]['op'];
+                    document.getElementById(name + "_host").innerHTML = config[name]['host'];
+                    document.getElementById(name + "_mac").innerHTML = config[name]['mac'];
+                  }
+                }
+                setTimeout('refreshSmartJenkins()',refreshInterval);
+            }
+        }
+        xmlHttp.open("GET", "sj/refresh", true);
+        xmlHttp.send(null);
+    }
+    setTimeout('refreshSmartJenkins()',refreshInterval);
+  </script>
+  <form method="get" action="sj/onoff">
+      <tr>
+          <td style="vertical-align:middle;"><b>SLAVE NAME</b></td>
+          <td style="vertical-align:middle;"><b>IP/MAC ADDRESS</b></td>
+          <td style="vertical-align:middle;"><b>ON/OFF</b></td>
+      </tr>
+      <tr >
+          <td colspan="3" style="height:2px; padding:0px;"><hr />
+          </td>
+      </tr>
+      <%
+         it.slaves.each { |slave|
+           name = slave.name
+           config = it.computer_config(name)
+      %>
+        <tr>
+          <td style="vertical-align: middle;" align="center"><%= name %></td>
+          <td style="vertical-align: middle;" align="center">
+            <table cellspacing="0" cellpadding="0">
+              <tr align="center">
+                <td id="<%= name + '_host' %>" style="padding: 0px; text-align: center;"><%= config['host'] %></td>
+              </tr>
+              <tr align="center">
+                <td id="<%= name + '_mac' %>" style="padding: 0px; text-align: center;"><%= config['mac'] %></td>
+              </tr>
+            </table>
+          </td>
+          <td style="vertical-align: middle;" align="center">
+            <input type="button" value="<%= config['op'] %>" id="<%= name + '_op' %>" name="<%= name %>" onclick="doOnoff(this);"/>
+          </td>
+        </tr>
+      <% } %>
+  </form>
+<% end %>

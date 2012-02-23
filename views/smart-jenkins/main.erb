@@ -1,0 +1,356 @@
+<%
+  key = @widget.class
+  root_url = @widget.root_url
+  com_manager = @widget.computer_manager
+  job_manager = @widget.job_manager
+  config = @widget.config
+%>
+<html>
+  <head>
+    <title>Smart Jenkins</title>
+    <script type="text/javascript" src="glassLayerPopup_0.66/glasslayerpopup.js"></script>
+    <script type="text/javascript">
+      Timeline_ajax_url = "timeline_2.3.0/timeline_ajax/simile-ajax-api.js";
+      Timeline_urlPrefix = "timeline_2.3.0/timeline_js/";
+      Timeline_parameters = "bundle=true";
+    </script>
+    <script src="timeline_2.3.0/timeline_js/timeline-api.js" type="text/javascript"></script>
+    <script type="text/javascript">
+      SimileAjax.History.enabled = false;
+      addWindowEventListener("load",
+        function() {
+          var tl;
+          var tz = <%= @widget.time_zone_offset %>;
+
+          var eventSource = new Timeline.DefaultEventSource();
+          eventSource.loadJSON(eval("<%= @widget.job_events_json %>"), ".");
+          var bandInfos = [
+            Timeline.createBandInfo({
+              eventSource: eventSource,
+              date: "<%= @widget.current_time %>",
+              timeZone: tz,
+              width: "30%",
+              intervalUnit: Timeline.DateTime.DAY,
+              intervalPixels: 200,
+              overview: true
+            }),
+            Timeline.createBandInfo({
+              eventSource: eventSource,
+              date: "<%= @widget.current_time %>",
+              timeZone: tz,
+              width: "70%",
+              intervalUnit: Timeline.DateTime.HOUR,
+              intervalPixels: 100
+            })
+          ];
+
+          for (var i = 0; i < bandInfos.length; i++) {
+            bandInfos[i].decorators = <%= @widget.time_slot.decorator_json %>;
+          }
+
+          bandInfos[0].syncWith = 1;
+          bandInfos[0].highlight = true;
+
+          tl = Timeline.create(document.getElementById("smart-jenkins-timeline"), bandInfos);
+
+          var resizeTimerID = null;
+          addWindowEventListener("resize",
+            function onResize() {
+              if (resizeTimerID == null) {
+                resizeTimerID = window.setTimeout(function() {
+                  resizeTimerID = null;
+                  tl.layout();
+                }, 500);
+              }
+            }
+          );
+        }
+      );
+
+      function addWindowEventListener(event, func) {
+        if (window.addEventListener) { //for W3C DOM
+          window.addEventListener(event, func, false);
+        } else if (window.attachEvent) { //for IE
+          window.attachEvent("on" + event, func);
+        } else {
+          if (event == "load") {
+            window.onload = func;
+          } else if (event == "resize") {
+            window.onresize = func;
+          }
+        }
+      }
+
+      function showHelp(name) {
+        if (document.getElementById(name).style.display == "none") {
+          document.getElementById(name).style.display = "";
+        } else {
+          document.getElementById(name).style.display = "none";
+        }
+      }
+
+      function validate() {
+        return validateTimeSlot();
+      }
+
+      function validateTimeSlot() {
+        var items = document.getElementById("timeSlot").value.replace(/\s/g, "").split(",");
+        for (var i in items) {
+          if (!items[i].match(/^((\d|[01][0-9]|2[0-4])(:(\d|[05][0-9])){0,2})?(-((\d|[01][0-9]|2[0-4])(:(\d|[05][0-9])){0,2})?)?$/)) {
+            alert('Invalid input value "' + items[i] + '".');
+            return false;
+          }
+        }
+        return true;
+      }
+
+      function enableAll(checkbox, name) {
+        var checked = checkbox.checked;
+        checkboxes = document.getElementsByName(name);
+        for (var i = checkboxes.length - 1; i >=0; i--) {
+          checkboxes[i].childNodes[0].checked = checked;
+        }
+      }
+
+      function enable(checkbox, id) {
+        var checked = checkbox.checked;
+        if (!checked) {
+          document.getElementById(id).checked = false;
+        }
+      }
+    </script>
+    <style type="text/css">
+      .jobTable {
+        border: 1px solid #BBB;
+        border-collapse: collapse;
+      }
+      .jobTable tr {
+        border: 1px solid #BBB;
+        padding: 3px 4px;
+        text-align: center;
+      }
+      .jobTable td {
+        vertical-align: middle;
+      }
+      .jobTable th {
+        font-size: 11px;
+      }
+
+      .jobTableFontSizeS td {
+        font-size: 11px;
+      }
+      .jobTableFontSizeM td {
+        font-size: 15px;
+      }
+      .jobTableFontSizeL td {
+        font-size: 19px;
+      }
+
+      td.tab {
+        background-color: #FFFFFF;
+      }
+      td.tab:hover {
+        background-color: #777;
+      }
+    </style>
+  </head>
+  <body>
+    <table width="100%">
+      <tr>
+        <td>
+          <% if config[key::ENABLE] %>
+            <a href="enable">Disable Smart-Jenkins Scheduler</a>
+          <% else %>
+            <a href="enable">Enable Smart-Jenkins Scheduler</a>
+          <% end %>
+        </td>
+      </tr>
+      <tr>
+        <td>
+          <div id="smart-jenkins-timeline" style="height: 200px; border: 1px solid #aaa"></div>
+        </td>
+      </tr>
+    </table>
+
+    <% if config[key::ENABLE] %>
+    <form action="configure_timeslot" method="post" onsubmit="return validate();">
+      <table width="100%">
+        <tr>
+          <td style="white-space: nowrap; vertical-align: middle;">OK Time Slot</td>
+          <td style="width: 100%; vertical-align: middle;">
+            <input type="text" name="time_slot" value="<%= @widget.time_slot.value %>" style="width: 100%"/>
+          </td>
+          <td style="vertical-align: middle;">
+            <a href="javascript:showHelp('helpForTimeSlot');">
+              <img alt="Help For OK Time Slot" src="<%= root_url %>images/16x16/help.png" height="16" width="16"/>
+            </a>
+          </td>
+        </tr>
+        <tr>
+          <td colspan="2">
+            <div id="helpForTimeSlot" style="display: none; background-color: #F0F0F0; border: 1px solid #BBB; padding: 1em;">
+              Rule : Day of the week|Date@Time slot<br>
+              Example
+              <table>
+                <tr>
+                  <td>1-5@8-18</td>
+                  <td>: Every Monday to Friday, From 08:00:00 to 18:00:00</td>
+                </tr>
+                <tr>
+                  <td>*@8:30-18:30</td>
+                  <td>: Everyday, From 08:30:00 to 18:30:00</td>
+                </tr>
+                <tr>
+                  <td>2011/7/1@*</td>
+                  <td>: 2011/7/1, From 00:00:00 to 24:00:00</td>
+                </tr>
+                <tr>
+                  <td>7|2011/7/1@0-5|10-15</td>
+                  <td>: Every Sunday or 2011/7/1, From 00:00:00 to 05:00:00 or from 10:00:00 to 15:00:00</td>
+                </tr>
+              </table>
+            </div>
+          </td>
+          <td></td>
+        </tr>
+        <tr>
+          <td colspan="3">
+            <input type="submit" name="Submit" value="SAVE"/>
+          </td>
+        </tr>
+      </table>
+    </form>
+
+    <form action="configure" method="post">
+        <table width="100%" cellpadding="0" cellspacing="0">
+          <tr style="height:3px;">
+            <td style="height:3px; padding:0px"></td>
+            <% if config[key::TAB_TYPE] == 0 %>
+              <td rowspan="2" style="vertical-align: middle; text-align: center; width: 60px; border: solid 1px #BBB; border-bottom: none; background-color: #F0F0F0; font-size: 11px;"><b>JOBS</b></td>
+              <td style="height:3px; padding:0px"></td>
+            <% elsif config[key::TAB_TYPE] == 1 %>
+              <td style="height:3px; padding:0px"></td>
+              <td rowspan="2" style="vertical-align: middle; text-align: center; width: 60px; border: solid 1px #BBB; border-bottom: none; background-color: #F0F0F0; font-size: 11px;"><b>SLAVES</b></td>
+            <% end %>
+            <td style="height:3px; padding:0px"></td>
+          </tr>
+          <tr height="25px">
+            <td style="border: none; border-bottom: 1px solid #bbb;"></td>
+            <% if config[key::TAB_TYPE] == 0 %>
+              <td class="tab" style="vertical-align: middle; text-align: center; width: 60px; border: solid 1px #BBB; border-left: none;"><a style="text-decoration: none; font-size: 11px;" href="change_tab?tab=1"><b>SLAVES</b></a></td>
+            <% elsif config[key::TAB_TYPE] == 1 %>
+              <td class="tab" style="vertical-align: middle; text-align: center; width: 60px; border: solid 1px #BBB; border-right: none;"><a style="text-decoration: none; font-size: 11px;" href="change_tab?tab=0"><b>JOBS</b></a></td>
+            <% end %>
+            <td width="30px" style="border: solid 1px #BBB; border-top: none; border-right: none;"></td>
+            <td style="border: solid 1px #BBB; border-left: none; border-top: none; border-right: none;">
+              <% if config[key::TAB_TYPE] == 0 %>
+              <select name="view_name">
+                <%  selected = @widget.view_name
+                    @widget.view_names.each { |name| %>
+                <option value="<%= name %>" <%= (selected == name ? 'selected' : '') %>><%= name %></option>
+                <% } %>
+              </select>
+              <% end %>
+              <input type="text" name="filter" value="<%= (config[key::TAB_TYPE] == 0 ? config[key::JOB_FILTER] : config[key::SLAVE_FILTER]) %>" style="width: 60%;">
+              <input type="button" name="filter_btn" value="Filter" onclick="this.form.action='<%= root_url %>sj/filter';this.form.submit();">
+            </td>
+            <td width="10px" style="border: solid 1px #BBB; border-left: none; border-top: none; border-right: none;"></td>
+            <td style="vertical-align: middle; border-bottom: solid 1px #BBB; width: 130px;" align="right">
+              <table cellspacing="1" cellpadding="1">
+                <tr>
+                  <td>Font Size:</td>
+                  <%
+                      case config[key::FONT_SIZE]
+                      when 'S'
+                  %>
+                      <td id="fontSizeS">S</td>
+                      <td id="fontSizeM"><a href="font_size?size=M">M</a></td>
+                      <td id="fontSizeL"><a href="font_size?size=L">L</a></td>
+                  <% when 'M' %>
+                      <td id="fontSizeS"><a href="font_size?size=S">S</a></td>
+                      <td id="fontSizeM">M</td>
+                      <td id="fontSizeL"><a href="font_size?size=L">L</a></td>
+                  <% when 'L' %>
+                      <td id="fontSizeS"><a href="font_size?size=S">S</a></td>
+                      <td id="fontSizeM"><a href="font_size?size=M">M</a></td>
+                      <td id="fontSizeL">L</td>
+                  <% end %>
+                </tr>
+              </table>
+            </td>
+          </tr>
+        </table>
+
+        <% if config[key::TAB_TYPE] == 0 %>
+        <table id="jobTable" class="jobTable jobTableFontSize<%= config[key::FONT_SIZE] %>" width="100%" style="margin-top:0px; border-top: none;">
+          <tr height="25px" style="background-color: #F0F0F0; border-top: none;">
+            <%
+              filtered_jobs = @widget.filtered_jobs
+              checked = true
+              filtered_jobs.each { |job|
+                unless job_manager.config(job.name)[key::ENABLE]
+                  checked = false
+                  break
+                end
+              }
+            %>
+            <th><input type="checkbox" id="job_all" name="job_all" <%= (checked ? 'checked' : '') %> onclick="enableAll(this, 'job_checkbox');"></th>
+            <th>JOB NAME</th>
+            <th>TRIGGER</th>
+            <th>LAST BLOCKED BUILD</th>
+            <th>LAST SCHEDULED BUILD</th>
+            <th>NEXT SCHEDULED BUILD</th>
+          </tr>
+          <%
+             filtered_jobs.each { |job|
+               name = job.name
+               job_config = job_manager.config(name)
+          %>
+            <tr>
+              <td name="job_checkbox"><input type="checkbox" name="<%= name %>_enable" <%= (job_config[key::ENABLE] ? 'checked' : '') %> onclick="enable(this, 'job_all');"/></td>
+              <td><a href="<%= root_url %>job/<%= name %>/" onclick="GlassLayerPopupsManager.getPopup(135).getContextWindow().document.location = this.href;"><%= name %></a></td>
+              <td><%= job_manager.trigger(job) %></td>
+              <td><%= @widget.format_date(job_config[key::LAST_BLOCKED]) %></td>
+              <td><%= @widget.format_date(job_config[key::LAST_SCHEDULED]) %></td>
+              <td>
+                <input type="text" name="<%= name %>_schedule" value="<%= @widget.format_date(job_config[key::NEXT_SCHEDULED]) %>" style="width: 100%"/>
+              </td>
+            </tr>
+          <% } %>
+        </table>
+        <% end %>
+
+        <% if config[key::TAB_TYPE] == 1 %>
+        <table id="jobTable" class="jobTable jobTableFontSize<%= config[key::FONT_SIZE] %>" width="100%" style="margin-top:0px; border-top: none;">
+          <tr height="25px" style="background-color: #F0F0F0; border-top: none;">
+            <%
+              filtered_slaves = @widget.filtered_slaves
+              checked = true
+              filtered_slaves.each do |slave|
+                unless com_manager.config(slave.name)[key::ENABLE]
+                  checked = false
+                  break
+                end
+              end
+            %>
+            <th><input type="checkbox" id="slave_all" name="slave_all" <%= (checked ? 'checked' : '') %> onclick="enableAll(this, 'slave_checkbox');"></th>
+            <th>SLAVE NAME</th>
+          </tr>
+          <%
+             @widget.filtered_slaves.each { |slave|
+               name = slave.name
+               com_config = com_manager.config(name)
+          %>
+            <tr>
+              <td name="slave_checkbox"><input type="checkbox" name="<%= name %>_enable" <%= (com_config[key::ENABLE] ? 'checked' : '') %> onclick="enable(this, 'slave_all');"/></td>
+              <td><a href="<%= root_url %>computer/<%= name %>/" onclick="GlassLayerPopupsManager.getPopup(135).getContextWindow().document.location = this.href;"><%= name %></a></td>
+            </tr>
+          <% } %>
+        </table>
+        <% end %>
+
+      <input type="submit" name="Submit" value="SAVE"/>
+    </form>
+    <% end %>
+  </body>
+</html>
